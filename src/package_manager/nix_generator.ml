@@ -208,6 +208,28 @@ let generate_project_flake
   Buffer.add_string buf (Printf.sprintf "          ]%s;\n" extra_pkgs);
   Buffer.add_string buf "\n";
   Buffer.add_string buf "          shellHook = ''\n";
+  (* ── Closure-rebuild: rebuild R_LIBS_SITE from this shell's own deps ──
+     Prevents segfaults when nix-shell is entered from inside another nix-shell.
+     The inner shell inherits R_LIBS_SITE from the outer shell, pointing to
+     /nix/store/ paths compiled against a different R binary ABI. This block
+     discards the inherited value and rebuilds R_LIBS_SITE from the inner
+     shell's own closure. See JohnGavin/llm#303 for full context. *)
+  Buffer.add_string buf "            # ── Closure-rebuild: fix R_LIBS_SITE for nested nix-shell (JohnGavin/llm#303) ──\n";
+  Buffer.add_string buf "            R_LIBS_SITE=\"\"\n";
+  Buffer.add_string buf "            for pkg in $buildInputs; do\n";
+  Buffer.add_string buf "              for dep in $(nix-store -qR \"$pkg\" 2>/dev/null); do\n";
+  Buffer.add_string buf "                if [ -d \"$dep/library\" ]; then\n";
+  Buffer.add_string buf "                  case \":$R_LIBS_SITE:\" in\n";
+  Buffer.add_string buf "                    *\":$dep/library:\"*) ;;\n";
+  Buffer.add_string buf "                    *) R_LIBS_SITE=\"''${R_LIBS_SITE:+$R_LIBS_SITE:}$dep/library\" ;;\n";
+  Buffer.add_string buf "                  esac\n";
+  Buffer.add_string buf "                fi\n";
+  Buffer.add_string buf "              done\n";
+  Buffer.add_string buf "            done\n";
+  Buffer.add_string buf "            export R_LIBS_SITE\n";
+  Buffer.add_string buf "            unset R_LIBS_USER\n";
+  Buffer.add_string buf "            unset R_LIBS\n";
+  Buffer.add_string buf "            # ── End closure-rebuild ──\n";
   if deps <> [] then begin
     Buffer.add_string buf "            export T_PACKAGE_PATH=\"";
     List.iteri (fun i dep ->
@@ -372,6 +394,25 @@ let generate_package_flake
     Buffer.add_string buf "          ];\n";
   Buffer.add_string buf "\n";
   Buffer.add_string buf "          shellHook = ''\n";
+  (* ── Closure-rebuild: rebuild R_LIBS_SITE from this shell's own deps ──
+     Prevents segfaults when nix-shell is entered from inside another nix-shell.
+     See JohnGavin/llm#303 for full context. *)
+  Buffer.add_string buf "            # ── Closure-rebuild: fix R_LIBS_SITE for nested nix-shell (JohnGavin/llm#303) ──\n";
+  Buffer.add_string buf "            R_LIBS_SITE=\"\"\n";
+  Buffer.add_string buf "            for pkg in $buildInputs; do\n";
+  Buffer.add_string buf "              for dep in $(nix-store -qR \"$pkg\" 2>/dev/null); do\n";
+  Buffer.add_string buf "                if [ -d \"$dep/library\" ]; then\n";
+  Buffer.add_string buf "                  case \":$R_LIBS_SITE:\" in\n";
+  Buffer.add_string buf "                    *\":$dep/library:\"*) ;;\n";
+  Buffer.add_string buf "                    *) R_LIBS_SITE=\"''${R_LIBS_SITE:+$R_LIBS_SITE:}$dep/library\" ;;\n";
+  Buffer.add_string buf "                  esac\n";
+  Buffer.add_string buf "                fi\n";
+  Buffer.add_string buf "              done\n";
+  Buffer.add_string buf "            done\n";
+  Buffer.add_string buf "            export R_LIBS_SITE\n";
+  Buffer.add_string buf "            unset R_LIBS_USER\n";
+  Buffer.add_string buf "            unset R_LIBS\n";
+  Buffer.add_string buf "            # ── End closure-rebuild ──\n";
   if deps <> [] then begin
     Buffer.add_string buf "            export T_PACKAGE_PATH=\"";
     List.iteri (fun i dep ->
