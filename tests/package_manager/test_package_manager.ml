@@ -1199,6 +1199,39 @@ min_version = "0.51.0"
     && has "export PYTHONPATH=\"${t-lang.packages.${system}.default}/share/tlang/py-package/src:''${PYTHONPATH:-}\""
     && has "export JULIA_LOAD_PATH=\":${t-lang.packages.${system}.tlang-julia-path}:''${JULIA_LOAD_PATH:-}\"");
 
+  test_pm "project flake shellHook contains closure-rebuild block (JohnGavin/llm#303)" (fun () ->
+    let flake = Nix_generator.generate_project_flake
+      ~project_name:"r-proj" ~nixpkgs_date:"2026-02-10"
+      ~t_version:"0.51.0" ~deps:[] ~r_deps:["dplyr"; "tidyr"] () in
+    let has s = try ignore (Str.search_forward (Str.regexp_string s) flake 0); true
+                with Not_found -> false in
+    (* The closure-rebuild marker comment must be present *)
+    has "Closure-rebuild"
+    (* R_LIBS_SITE must be reset in the shellHook *)
+    && has "R_LIBS_SITE=\"\""
+    (* The nix-store -qR closure scan must be present *)
+    && has "nix-store -qR"
+    (* The anti-quote syntax for Nix strings must be correct *)
+    && has "''${R_LIBS_SITE:+$R_LIBS_SITE:}$dep/library"
+    (* The variables must be exported / unset *)
+    && has "export R_LIBS_SITE"
+    && has "unset R_LIBS_USER"
+    && has "unset R_LIBS");
+
+  test_pm "package flake shellHook contains closure-rebuild block (JohnGavin/llm#303)" (fun () ->
+    let flake = Nix_generator.generate_package_flake
+      ~package_name:"my-rpkg" ~package_version:"0.1.0"
+      ~nixpkgs_date:"2026-02-10" ~t_version:"0.51.0" ~deps:[] () in
+    let has s = try ignore (Str.search_forward (Str.regexp_string s) flake 0); true
+                with Not_found -> false in
+    has "Closure-rebuild"
+    && has "R_LIBS_SITE=\"\""
+    && has "nix-store -qR"
+    && has "''${R_LIBS_SITE:+$R_LIBS_SITE:}$dep/library"
+    && has "export R_LIBS_SITE"
+    && has "unset R_LIBS_USER"
+    && has "unset R_LIBS");
+
   print_newline ();
 
   (* ===================================================== *)
