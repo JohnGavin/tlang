@@ -2,7 +2,13 @@
   description = "T — A Functional Language for Tabular Data";
 
   inputs = {
-    nixpkgs.url = "github:rstats-on-nix/nixpkgs";
+    # Pin to the exact 2026-05-08 "daily update" commit (334a2103).
+    # Using a rev-pinned flake input (narHash in flake.lock) eliminates the
+    # hash-drift that plagued the previous builtins.fetchTarball approach:
+    # GitHub periodically re-compresses its /archive/<date>.tar.gz tarballs,
+    # changing the sha256 while the content is identical.  A flake input is
+    # content-addressed via narHash and never drifts.
+    nixpkgs.url = "github:rstats-on-nix/nixpkgs/334a2103f3e36f3a89418262c1b9b116646093b6";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -21,14 +27,12 @@
     # (x86_64-linux, aarch64-darwin, etc.)
     flake-utils.lib.eachDefaultSystem (system:
       let
-        # Single source of truth for the R-specific Nixpkgs snapshot.
-        rstats-nix-date   = nixpkgs.lib.removeSuffix "\n" (builtins.readFile ./RSTATS-NIX-DATE);
-
-        # Use the Nix packages for the specified system
-        pkgs = (import (builtins.fetchTarball {
-          url    = "https://github.com/rstats-on-nix/nixpkgs/archive/${rstats-nix-date}.tar.gz";
-          sha256 = "sha256:00y818x5l3dan9d29w690l9z25v2x13g4c81zqbzxhnvfry913mn";
-        }) { inherit system; }).extend (self: super: {
+        # Use the Nix packages for the specified system.
+        # The nixpkgs flake input is pinned to the 2026-05-08 "daily update"
+        # commit (334a2103) via flake.lock (narHash-content-addressed).
+        # The RSTATS-NIX-DATE file is retained as documentation of the intended
+        # snapshot date but is no longer used at evaluation time.
+        pkgs = (import nixpkgs { inherit system; }).extend (self: super: {
           lightgbm = super.lightgbm.overrideAttrs (old: {
             cudaSupport = false;
             openclSupport = false;
