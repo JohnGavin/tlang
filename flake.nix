@@ -2,17 +2,12 @@
   description = "T — A Functional Language for Tabular Data";
 
   inputs = {
-    # General nixpkgs: pinned to the 2026-04-27 commit (7b74e320).
-    # This tree has jpmml-evaluator, the full OCaml/Julia/Python ecosystem,
-    # and all devShell buildInputs.  Commit-pinned (narHash in flake.lock)
-    # so it is drift-proof and content-addressed.
-    nixpkgs.url = "github:rstats-on-nix/nixpkgs/7b74e320f417dfdf93fffb2a4c102a3ac6e054bc";
-
-    # R-packageset nixpkgs: pinned to the 2026-05-08 "daily update" commit
-    # (334a2103).  Used ONLY for the R packageset (rWrapper, rPackages).
-    # Kept separate because this snapshot has newer R packages but is missing
-    # some system-level packages (e.g. jpmml-evaluator) present in 2026-04-27.
-    nixpkgs-rstats.url = "github:rstats-on-nix/nixpkgs/334a2103f3e36f3a89418262c1b9b116646093b6";
+    # Single rstats-on-nix nixpkgs snapshot, pinned to the 2026-05-08 branch
+    # tip commit (1407df0e, fetched 2026-06-24).  This commit has BOTH
+    # jpmml-statsmodels and jpmml-evaluator, plus the full OCaml/Julia/Python
+    # ecosystem and all devShell buildInputs.  Commit-pinned (narHash in
+    # flake.lock) so it is drift-proof and content-addressed.
+    nixpkgs.url = "github:rstats-on-nix/nixpkgs/1407df0ee7bd30ee5c53dbd31e046af36d5e4da7";
 
     flake-utils.url = "github:numtide/flake-utils";
   };
@@ -27,13 +22,14 @@
     ];
   };
 
-  outputs = { self, nixpkgs, nixpkgs-rstats, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils }:
     # This function creates the outputs for common system architectures
     # (x86_64-linux, aarch64-darwin, etc.)
     flake-utils.lib.eachDefaultSystem (system:
       let
-        # pkgs — 2026-04-27 snapshot (7b74e320): devShell, OCaml, Julia,
-        # Python, jpmml-evaluator, and all other system-level packages.
+        # Single source of truth: one pkgs from the pinned rstats-on-nix commit.
+        # Provides R (rWrapper/rPackages), jpmml-statsmodels, jpmml-evaluator,
+        # boost, OCaml/Julia deps, and all devShell buildInputs.
         pkgs = (import nixpkgs { inherit system; }).extend (self: super: {
           lightgbm = super.lightgbm.overrideAttrs (old: {
             cudaSupport = false;
@@ -43,21 +39,9 @@
           });
         });
 
-        # rpkgs — 2026-05-08 snapshot (334a2103): used ONLY for the R
-        # packageset (rWrapper, rPackages).  All other packages (OCaml, Julia,
-        # jpmml-evaluator, devShell buildInputs) come from pkgs above.
-        rpkgs = (import nixpkgs-rstats { inherit system; }).extend (self: super: {
-          lightgbm = super.lightgbm.overrideAttrs (old: {
-            cudaSupport = false;
-            openclSupport = false;
-            cmakeFlags = (old.cmakeFlags or []) ++ [ "-DUSE_GPU=OFF" ];
-            buildInputs = (old.buildInputs or []) ++ [ self.boost ];
-          });
-        });
-
-        # Build R with specific packages using the 2026-05-08 R packageset
-        R-with-packages = rpkgs.rWrapper.override {
-          packages = with rpkgs.rPackages; [
+        # Build R with specific packages
+        R-with-packages = pkgs.rWrapper.override {
+          packages = with pkgs.rPackages; [
             dplyr
             readr
             testthat
@@ -74,7 +58,7 @@
             r2pmml
             (lightgbm.overrideAttrs (old: {
               cmakeFlags = (old.cmakeFlags or []) ++ [ "-DUSE_GPU=OFF" ];
-              buildInputs = (old.buildInputs or []) ++ [ rpkgs.boost ];
+              buildInputs = (old.buildInputs or []) ++ [ pkgs.boost ];
             }))
             faraway
             MASS
@@ -277,11 +261,11 @@ chmod +x $out/bin/bisect-ppx-report
         # Bisect-instrumented build for coverage collection
         t-lang-coverage = mkTLang { withCoverage = true; };
 
-        # Companion R package — built against the 2026-05-08 R packageset
-        tlang-r = rpkgs.rPackages.buildRPackage {
+        # Companion R package
+        tlang-r = pkgs.rPackages.buildRPackage {
           name = "tlang";
           src = ./r-package;
-          propagatedBuildInputs = with rpkgs.rPackages; [ jsonlite ];
+          propagatedBuildInputs = with pkgs.rPackages; [ jsonlite ];
         };
 
         # Companion Python package
