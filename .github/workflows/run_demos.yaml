@@ -11,7 +11,7 @@ on:
 
 jobs:
   trigger-demo:
-    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' }}
+    if: ${{ github.repository == 'b-rodrigues/tlang' && ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request') }}
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch event to t_demos
