@@ -2,7 +2,13 @@
   description = "T — A Functional Language for Tabular Data";
 
   inputs = {
-    nixpkgs.url = "github:rstats-on-nix/nixpkgs";
+    # Single rstats-on-nix nixpkgs snapshot, pinned to the 2026-05-08 branch
+    # tip commit (1407df0e, fetched 2026-06-24).  This commit has BOTH
+    # jpmml-statsmodels and jpmml-evaluator, plus the full OCaml/Julia/Python
+    # ecosystem and all devShell buildInputs.  Commit-pinned (narHash in
+    # flake.lock) so it is drift-proof and content-addressed.
+    nixpkgs.url = "github:rstats-on-nix/nixpkgs/1407df0ee7bd30ee5c53dbd31e046af36d5e4da7";
+
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -21,14 +27,10 @@
     # (x86_64-linux, aarch64-darwin, etc.)
     flake-utils.lib.eachDefaultSystem (system:
       let
-        # Single source of truth for the R-specific Nixpkgs snapshot.
-        rstats-nix-date   = nixpkgs.lib.removeSuffix "\n" (builtins.readFile ./RSTATS-NIX-DATE);
-
-        # Use the Nix packages for the specified system
-        pkgs = (import (builtins.fetchTarball {
-          url    = "https://github.com/rstats-on-nix/nixpkgs/archive/${rstats-nix-date}.tar.gz";
-          sha256 = "sha256:00y818x5l3dan9d29w690l9z25v2x13g4c81zqbzxhnvfry913mn";
-        }) { inherit system; }).extend (self: super: {
+        # Single source of truth: one pkgs from the pinned rstats-on-nix commit.
+        # Provides R (rWrapper/rPackages), jpmml-statsmodels, jpmml-evaluator,
+        # boost, OCaml/Julia deps, and all devShell buildInputs.
+        pkgs = (import nixpkgs { inherit system; }).extend (self: super: {
           lightgbm = super.lightgbm.overrideAttrs (old: {
             cudaSupport = false;
             openclSupport = false;
