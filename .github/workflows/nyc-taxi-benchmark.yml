@@ -27,8 +27,8 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
           extra_nix_config: |
             experimental-features = nix-command flakes
-            substituters = https://cache.nixos.org https://rstats-on-nix.cachix.org
-            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= rstats-on-nix.cachix.org-1:vdiiVgocg6WeJrODIqdprZRUrhi1JzhBnXv7aWI6+F0=
+            substituters = https://cache.nixos.org https://rstats-on-nix.cachix.org https://johngavin.cachix.org
+            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= rstats-on-nix.cachix.org-1:vdiiVgocg6WeJrODIqdprZRUrhi1JzhBnXv7aWI6+F0= johngavin.cachix.org-1:ZWxhgInMqbjM7pEvgRm8g3TpaJDhborNGouk4DeHcPc=
 
       - name: Setup Cachix (for R packages)
         uses: cachix/cachix-action@v13
@@ -38,10 +38,13 @@ jobs:
           skipPush: true
 
       - name: Build T
-        run: nix develop --accept-flake-config --command dune build
+        # --fallback: build from source if a substituter download fails transiently
+        # (cache.nixos.org broken-pipe / HTTP 416 seen 2026-06-26). johngavin cache
+        # (populated by Build and Cache) supplies the heavy paths to avoid that.
+        run: nix develop --accept-flake-config --fallback --command dune build
 
       - name: Run NYC taxi benchmarks
-        run: nix develop --accept-flake-config --command ./benchmarks/nyc_taxi/run_benchmark.sh --months 2023-01 --iterations 1
+        run: nix develop --accept-flake-config --fallback --command ./benchmarks/nyc_taxi/run_benchmark.sh --months 2023-01 --iterations 1
 
       - name: Print benchmark results
         if: always()
