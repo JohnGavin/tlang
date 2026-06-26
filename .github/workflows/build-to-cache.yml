@@ -54,15 +54,15 @@ jobs:
 
           echo "=== Runtime closure of t-lang ==="
           # Push the runtime closure of the built output
-          nix path-info --recursive "$RESULT" | cachix push tlang
+          nix path-info --recursive "$RESULT" | cachix push johngavin
 
           echo "=== Build-time input closure of t-lang ==="
           # Push everything that was needed to *build* t-lang
           # (nativeBuildInputs, buildInputs used only at build time, etc.)
           nix-store --query --requisites "$SHELL_DRV" \
             | grep -v '\.drv$' \
-            | cachix push tlang
+            | cachix push johngavin
 
           echo "=== DevShell closure ==="
           nix path-info --recursive ./dev-shell-profile \
-            | cachix push tlang
+            | cachix push johngavin
