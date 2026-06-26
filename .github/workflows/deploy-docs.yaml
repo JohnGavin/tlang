@@ -36,7 +36,7 @@ jobs:
 
       - name: Build documentation and theoretical paper
         run: |
-          nix develop .#default --command bash -c "
+          nix develop .#default --accept-flake-config --command bash -c "
             bash docs/build.sh &&
             quarto render paper/paper.qmd --to html &&
             mv paper/paper.html docs/theoretical_paper.html &&
@@ -47,6 +47,10 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          # Enable Pages (build_type=workflow) on first run instead of failing
+          # with "Get Pages site failed ... Not Found".
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

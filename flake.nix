@@ -16,9 +16,11 @@
   nixConfig = {
     extra-substituters = [
       "https://rstats-on-nix.cachix.org"
+      "https://johngavin.cachix.org"
     ];
     extra-trusted-public-keys = [
       "rstats-on-nix.cachix.org-1:vdiiVgocg6WeJrODIqdprZRUrhi1JzhBnXv7aWI6+F0="
+      "johngavin.cachix.org-1:ZWxhgInMqbjM7pEvgRm8g3TpaJDhborNGouk4DeHcPc="
     ];
   };
 
