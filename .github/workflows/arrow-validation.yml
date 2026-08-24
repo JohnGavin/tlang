@@ -39,7 +39,6 @@ jobs:
         uses: cachix/cachix-action@v13
         with:
           name: rstats-on-nix
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
           skipPush: true
 
       - name: Run Arrow native validation
@@ -81,7 +80,6 @@ jobs:
         uses: cachix/cachix-action@v13
         with:
           name: rstats-on-nix
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
           skipPush: true
 
       - name: Run Arrow fallback validation
