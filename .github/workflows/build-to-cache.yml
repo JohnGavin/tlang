@@ -6,6 +6,12 @@ on:
       - master
   schedule:
     - cron: '0 3 * * *'
+  # Manual trigger. Required by the credential-rotation runbook, which says a
+  # rotation is not complete until each consuming workflow has been run and
+  # observed green — a check on the operator's laptop cannot see a runner.
+  # Without this the only way to exercise a CI fix is to merge it to main and
+  # hope, or wait until 03:00. See JohnGavin/llm#1013.
+  workflow_dispatch:
 jobs:
   build:
     strategy:
@@ -17,12 +23,43 @@ jobs:
           - aarch64-linux
           - aarch64-darwin
     runs-on: ${{ contains(matrix.system, 'darwin') && 'macos-latest' || 'ubuntu-latest' }}
-    env:
-      # Surfaced as an env var so the push step can gate on its presence.
-      # (secrets.* cannot be referenced directly in a step-level `if:`.)
-      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    # NOTE: deliberately NO job-level `env: CACHIX_AUTH_TOKEN`. It used to live
+    # here so the push step could gate on its presence, but a job-level env is
+    # exported into EVERY step — including `cachix use` below. The cachix CLI
+    # reads CACHIX_AUTH_TOKEN from the environment, so a dead token turned an
+    # unauthenticated pull from a PUBLIC cache into an auth failure, and the
+    # whole build died before compiling anything:
+    #
+    #   Binary cache rstats-on-nix doesn't exist or you don't have access.
+    #   Error: Cachix Auth token "read_write_..." has been revoked.
+    #
+    # 11 consecutive nightly failures, 2026-08-14 to 2026-08-24, from a
+    # credential rotation elsewhere. A missing credential should cost the cache
+    # write, never the build. The token is now scoped to the push step alone.
     steps:
       - uses: actions/checkout@v4
+
+      # `secrets.*` cannot be referenced in a step-level `if:`, which is why the
+      # token was hoisted to job level in the first place. Converting presence
+      # into a step OUTPUT gives the push step something safe to gate on without
+      # putting the secret in scope for every other step.
+      #
+      # Tests non-emptiness only, and never renders the value. In particular NOT
+      # `${VAR:+yes}${VAR:-no}` — that construct PRINTS the secret when it is
+      # set (see the credential-management rule).
+      - name: Detect Cachix push credentials
+        id: cachix_creds
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        shell: bash
+        run: |
+          if [ -n "${CACHIX_AUTH_TOKEN:-}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            echo "Cachix auth token is present — closures will be pushed."
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No Cachix auth token — build will run, push will be skipped."
+          fi
 
       - uses: cachix/install-nix-action@v31
         with:
@@ -34,8 +71,11 @@ jobs:
 
       - uses: cachix/cachix-action@v15
         with:
-          # Public community cache, used for PULL only. No authToken here so the
-          # action does not attempt a post-job push to a cache we cannot write.
+          # Public community cache, PULL only. No authToken input, and — since
+          # the job-level env block was removed above — no CACHIX_AUTH_TOKEN in
+          # this step's environment either. Both are required: the action reads
+          # the input via core.getInput("authToken"), but the `cachix` CLI it
+          # spawns reads the env var, so dropping only the input is not enough.
           name: rstats-on-nix
 
       - name: Build default package
@@ -45,8 +85,12 @@ jobs:
         run: nix develop .#default --profile dev-shell-profile --command true
 
       - name: Push full closures to Cachix
-        # Skipped (CI still green) until a CACHIX_AUTH_TOKEN secret is configured.
-        if: ${{ env.CACHIX_AUTH_TOKEN != '' }}
+        # Skipped (CI still green) when no CACHIX_AUTH_TOKEN secret is set, or
+        # when the one that is set has been revoked — in the latter case this
+        # step fails, but the build above has already succeeded.
+        if: ${{ steps.cachix_creds.outputs.present == 'true' }}
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
         run: |
           # Resolve the real store paths (not the ./result symlink)
           RESULT=$(nix path-info .#default)
