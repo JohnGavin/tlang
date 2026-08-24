@@ -6,6 +6,12 @@ on:
       - master
   schedule:
     - cron: '0 3 * * *'
+  # Manual trigger. Required by the credential-rotation runbook, which says a
+  # rotation is not complete until each consuming workflow has been run and
+  # observed green — a check on the operator's laptop cannot see a runner.
+  # Without this the only way to exercise a CI fix is to merge it to main and
+  # hope, or wait until 03:00. See JohnGavin/llm#1013.
+  workflow_dispatch:
 jobs:
   build:
     strategy:
